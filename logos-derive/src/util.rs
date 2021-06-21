@@ -1,4 +1,4 @@
-pub use proc_macro2::{TokenStream, Span};
+pub use proc_macro2::{Span, TokenStream};
 use quote::quote;
 pub use syn::{Attribute, Expr, Ident, Lit, Meta, NestedMeta};
 
@@ -94,9 +94,10 @@ impl<V: Value> Value for Definition<V> {
                     ref lit => panic!("Invalid callback value: {}", quote!(#lit)),
                 };
 
-                self.callback.insert(callback, |_| {
-                    panic!("Only one callback can be defined per variant definition!")
-                });
+                self.callback.insert(callback);
+                // self.callback.insert(callback, |_| {
+                //     panic!("Only one callback can be defined per variant definition!")
+                // });
             }
             _ => panic!("Unexpected nested attribute: {}", quote!(#nested)),
         }
