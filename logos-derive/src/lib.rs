@@ -9,37 +9,29 @@
 // The `quote!` macro requires deep recursion.
 #![recursion_limit = "196"]
 
-extern crate syn;
-extern crate quote;
 extern crate proc_macro;
 extern crate proc_macro2;
+extern crate quote;
 extern crate regex_syntax;
+extern crate syn;
 extern crate utf8_ranges;
 
-mod util;
-mod tree;
-mod regex;
-mod handlers;
 mod generator;
+mod handlers;
+mod regex;
+mod tree;
+mod util;
 
-use tree::{Node, Fork};
-use util::{OptionExt, value_from_attr};
-use handlers::Handlers;
 use generator::Generator;
+use handlers::Handlers;
+use tree::{Fork, Node};
+use util::{value_from_attr, OptionExt};
 
-use quote::quote;
 use proc_macro::TokenStream;
-use syn::{ItemEnum, Fields};
+use quote::quote;
+use syn::{Fields, ItemEnum};
 
-#[proc_macro_derive(Logos, attributes(
-    extras,
-    error,
-    end,
-    token,
-    regex,
-    extras,
-    callback,
-))]
+#[proc_macro_derive(Logos, attributes(extras, error, end, token, regex, extras, callback,))]
 pub fn logos(input: TokenStream) -> TokenStream {
     let item: ItemEnum = syn::parse(input).expect("#[token] can be only applied to enums");
 
@@ -52,7 +44,7 @@ pub fn logos(input: TokenStream) -> TokenStream {
 
     for attr in &item.attrs {
         if let Some(ext) = value_from_attr("extras", attr) {
-            extras.insert(util::ident(&ext), |_| panic!("Only one #[extras] attribute can be declared."));
+            extras.insert(util::ident(&ext));
         }
     }
 
@@ -73,12 +65,18 @@ pub fn logos(input: TokenStream) -> TokenStream {
         variants.push(&variant.ident);
 
         if variant.discriminant.is_some() {
-            panic!("`{}::{}` has a discriminant value set. This is not allowed for Tokens.", name, variant.ident);
+            panic!(
+                "`{}::{}` has a discriminant value set. This is not allowed for Tokens.",
+                name, variant.ident
+            );
         }
 
         match variant.fields {
-            Fields::Unit => {},
-            _ => panic!("`{}::{}` has fields. This is not allowed for Tokens.", name, variant.ident),
+            Fields::Unit => {}
+            _ => panic!(
+                "`{}::{}` has fields. This is not allowed for Tokens.",
+                name, variant.ident
+            ),
         }
 
         for attr in &variant.attrs {
@@ -86,11 +84,11 @@ pub fn logos(input: TokenStream) -> TokenStream {
             let variant = &variant.ident;
 
             if ident == "error" {
-                error.insert(variant, |_| panic!("Only one #[error] variant can be declared."));
+                error.insert(variant);
             }
 
             if ident == "end" {
-                end.insert(variant, |_| panic!("Only one #[end] variant can be declared."));
+                end.insert(variant);
             }
 
             if let Some(path) = value_from_attr("token", attr) {
@@ -120,33 +118,36 @@ pub fn logos(input: TokenStream) -> TokenStream {
 
     let end = match end {
         Some(end) => end,
-        None => panic!("Missing #[end] token variant.")
+        None => panic!("Missing #[end] token variant."),
     };
 
     let extras = match extras {
         Some(ext) => quote!(#ext),
-        None      => quote!(()),
+        None => quote!(()),
     };
 
     // panic!("{:#?}", handlers);
 
-    let handlers = handlers.into_iter().map(|handler| {
-        use handlers::Handler;
+    let handlers = handlers
+        .into_iter()
+        .map(|handler| {
+            use handlers::Handler;
 
-        match handler {
-            Handler::Eof        => quote! { Some(eof) },
-            Handler::Error      => quote! { Some(_error) },
-            Handler::Whitespace => quote! { None },
-            Handler::Tree(tree) => generator.print_tree(tree),
-        }
-    }).collect::<Vec<_>>();
+            match handler {
+                Handler::Eof => quote! { Some(eof) },
+                Handler::Error => quote! { Some(_error) },
+                Handler::Whitespace => quote! { None },
+                Handler::Tree(tree) => generator.print_tree(tree),
+            }
+        })
+        .collect::<Vec<_>>();
 
     let fns = generator.fns();
 
-    let macro_lut =
-        variants.iter()
-            .enumerate()
-            .map(|(index, _)| quote!( #name!(#index; $($x::$variant => $val;)* $def), ));
+    let macro_lut = variants
+        .iter()
+        .enumerate()
+        .map(|(index, _)| quote!( #name!(#index; $($x::$variant => $val;)* $def), ));
 
     let macro_matches =
         variants.iter()
